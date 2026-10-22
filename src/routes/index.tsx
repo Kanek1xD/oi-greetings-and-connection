@@ -1,394 +1,526 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bird, Gamepad2, Medal, RotateCcw, Trophy } from "lucide-react";
+import { createFileRoute } from '@tanstack/react-router';
+import { useMemo, useState, type FormEvent } from 'react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
+  Bitcoin,
+  ChevronDown,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  Copy,
+  Eye,
+  EyeOff,
+  Gem,
+  LayoutDashboard,
+  LineChart,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 
-import { Button } from "@/components/ui/button";
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute('/')({
   head: () => ({
     meta: [
-      { title: "Flap! — voe o mais longe que puder" },
+      { title: 'NexoCrypto — sua carteira de criptoativos' },
       {
-        name: "description",
+        name: 'description',
         content:
-          "Um jogo mobile de passarinho: toque para voar, desvie dos canos e tente bater o seu recorde.",
+          'Dashboard NexoCrypto para acompanhar carteira, mercado e operações de criptoativos.',
       },
     ],
   }),
   component: Index,
 });
 
-type Phase = "ready" | "playing" | "gameover";
-
-type Pipe = {
-  id: number;
-  x: number;
-  gapY: number;
-  passed: boolean;
+type Asset = {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  holdings: number;
+  icon: LucideIcon;
+  iconClass: string;
+  spark: number[];
 };
 
-type GameState = {
-  phase: Phase;
-  score: number;
-  bird: {
-    x: number;
-    y: number;
-    vy: number;
-  };
-  pipes: Pipe[];
-};
+const formatCurrency = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 2,
+});
 
-const WORLD_WIDTH = 360;
-const WORLD_HEIGHT = 640;
-const GROUND_Y = 574;
-const BIRD_SIZE = 30;
-const PIPE_WIDTH = 56;
-const PIPE_GAP = 174;
-const GRAVITY = 980;
-const FLAP_FORCE = -350;
-const PIPE_SPEED = 150;
+const formatNumber = new Intl.NumberFormat('pt-BR', {
+  maximumFractionDigits: 2,
+});
 
-function createInitialGame(): GameState {
-  return {
-    phase: "ready",
-    score: 0,
-    bird: {
-      x: 82,
-      y: 292,
-      vy: 0,
-    },
-    pipes: [
-      { id: 1, x: 410, gapY: 304, passed: false },
-      { id: 2, x: 630, gapY: 390, passed: false },
-    ],
-  };
-}
+const marketAssets: Asset[] = [
+  {
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    price: 343220.45,
+    change: 4.82,
+    holdings: 5420.18,
+    icon: Bitcoin,
+    iconClass: 'bg-orange-500/15 text-orange-400',
+    spark: [30, 42, 35, 50, 45, 62, 57, 73, 68, 86],
+  },
+  {
+    symbol: 'ETH',
+    name: 'Ethereum',
+    price: 18456.2,
+    change: 2.36,
+    holdings: 3180.44,
+    icon: Gem,
+    iconClass: 'bg-indigo-500/15 text-indigo-300',
+    spark: [45, 38, 52, 47, 60, 55, 64, 58, 76, 71],
+  },
+  {
+    symbol: 'SOL',
+    name: 'Solana',
+    price: 864.73,
+    change: -1.18,
+    holdings: 1964.58,
+    icon: BarChart3,
+    iconClass: 'bg-cyan-500/15 text-cyan-300',
+    spark: [68, 75, 60, 64, 51, 58, 42, 48, 37, 43],
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether',
+    price: 5.02,
+    change: 0.08,
+    holdings: 1918.42,
+    icon: CircleDollarSign,
+    iconClass: 'bg-emerald-500/15 text-emerald-300',
+    spark: [47, 49, 48, 50, 49, 51, 50, 52, 51, 52],
+  },
+];
 
-function copyGame(game: GameState): GameState {
-  return {
-    ...game,
-    bird: { ...game.bird },
-    pipes: game.pipes.map((pipe) => ({ ...pipe })),
-  };
-}
+const navItems = [
+  { label: 'Visão geral', icon: LayoutDashboard },
+  { label: 'Carteira', icon: WalletCards },
+  { label: 'Mercado', icon: LineChart },
+  { label: 'Futuros', icon: BarChart3 },
+  { label: 'Configurações', icon: Settings2 },
+];
 
-function randomGap(): number {
-  return Math.round(235 + Math.random() * 170);
-}
-
-function BirdSprite({ y, vy }: { y: number; vy: number }) {
-  const tilt = Math.max(-25, Math.min(90, vy / 8));
-
+function Sparkline({ points, positive = true }: { points: number[]; positive?: boolean }) {
   return (
-    <div
-      className="absolute z-30 h-[4.7%] w-[8.4%]"
-      style={{
-        left: `${(82 / WORLD_WIDTH) * 100}%`,
-        top: `${(y / WORLD_HEIGHT) * 100}%`,
-        transform: `rotate(${tilt}deg)`,
-        transformOrigin: "center",
-      }}
-    >
-      <div className="relative h-full w-full rounded-[52%] border-2 border-amber-700/50 bg-gradient-to-br from-yellow-200 via-amber-300 to-orange-400 shadow-[2px_4px_0_rgba(120,53,15,0.25)]">
-        <span className="absolute -right-[18%] top-[24%] h-[28%] w-[22%] rounded-full bg-slate-900" />
-        <span className="absolute -right-[31%] top-[27%] h-[16%] w-[26%] rounded-r-full bg-orange-500" />
-        <span className="absolute -left-[16%] top-[35%] h-[34%] w-[48%] rotate-12 rounded-full bg-amber-100/80" />
-      </div>
-    </div>
-  );
-}
-
-function PipePair({ pipe }: { pipe: Pipe }) {
-  const topHeight = Math.max(0, pipe.gapY - PIPE_GAP / 2);
-  const bottomTop = pipe.gapY + PIPE_GAP / 2;
-  const bottomHeight = Math.max(0, GROUND_Y - bottomTop);
-  const left = `${(pipe.x / WORLD_WIDTH) * 100}%`;
-  const width = `${(PIPE_WIDTH / WORLD_WIDTH) * 100}%`;
-
-  return (
-    <div className="absolute inset-0 z-20 pointer-events-none">
-      <div
-        className="absolute top-0 rounded-b-md border-x-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14),inset_-5px_0_rgba(6,78,59,0.2)]"
-        style={{ left, width, height: `${(topHeight / WORLD_HEIGHT) * 100}%` }}
-      >
-        <span className="absolute -bottom-1 left-[-10%] h-7 w-[120%] rounded-md border-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14)]" />
-      </div>
-      <div
-        className="absolute rounded-t-md border-x-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14),inset_-5px_0_rgba(6,78,59,0.2)]"
-        style={{ left, top: `${(bottomTop / WORLD_HEIGHT) * 100}%`, width, height: `${(bottomHeight / WORLD_HEIGHT) * 100}%` }}
-      >
-        <span className="absolute -top-1 left-[-10%] h-7 w-[120%] rounded-md border-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14)]" />
-      </div>
-    </div>
-  );
-}
-
-function GameBoard({ game, onAction }: { game: GameState; onAction: () => void }) {
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label="Área do jogo. Toque para fazer o passarinho voar"
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onAction();
-      }}
-      onKeyDown={(event) => {
-        if (event.code === "Space" || event.code === "ArrowUp" || event.code === "Enter") {
-          event.preventDefault();
-          onAction();
-        }
-      }}
-      className="relative mx-auto w-full max-w-[390px] touch-none select-none overflow-hidden rounded-[2rem] border-[5px] border-slate-900 bg-sky-300 shadow-[0_24px_70px_rgba(15,23,42,0.45)] outline-none ring-offset-4 focus-visible:ring-2 focus-visible:ring-yellow-300"
-      style={{ aspectRatio: `${WORLD_WIDTH}/${WORLD_HEIGHT}` }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-b from-sky-300 via-sky-400 to-cyan-300" />
-      <div className="absolute left-[8%] top-[14%] h-5 w-[25%] rounded-full bg-white/55 blur-[1px] before:absolute before:-left-[18%] before:-top-3 before:h-7 before:w-[52%] before:rounded-full before:bg-white/55 after:absolute after:-right-[17%] after:-top-2 after:h-6 after:w-[44%] after:rounded-full after:bg-white/55" />
-      <div className="absolute right-[8%] top-[31%] h-4 w-[20%] rounded-full bg-white/45 before:absolute before:-left-[25%] before:-top-3 before:h-6 before:w-[48%] before:rounded-full before:bg-white/45 after:absolute after:-right-[15%] after:-top-2 after:h-5 after:w-[42%] after:rounded-full after:bg-white/45" />
-      <div className="absolute bottom-[9%] left-[-8%] h-[17%] w-[65%] rounded-[50%] bg-emerald-500/80" />
-      <div className="absolute bottom-[8%] right-[-12%] h-[20%] w-[72%] rounded-[50%] bg-emerald-600/85" />
-      <div className="absolute bottom-0 z-40 h-[10.4%] w-full border-t-4 border-lime-600/60 bg-lime-400 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.18)_0px,rgba(255,255,255,0.18)_8px,transparent_8px,transparent_18px)]" />
-      <div className="absolute bottom-0 z-50 h-[4.8%] w-full bg-gradient-to-b from-amber-500 to-orange-700" />
-
-      {game.pipes.map((pipe) => (
-        <PipePair key={pipe.id} pipe={pipe} />
+    <div className='flex h-10 items-end gap-1'>
+      {points.map((point, index) => (
+        <span
+          key={`${point}-${index}`}
+          className={`w-1.5 rounded-t-sm ${positive ? 'bg-emerald-400' : 'bg-rose-400'}`}
+          style={{ height: `${point}%`, opacity: 0.35 + index / 20 }}
+        />
       ))}
-      <BirdSprite y={game.bird.y} vy={game.bird.vy} />
-
-      <div className="absolute left-0 right-0 top-[5%] z-50 flex justify-center">
-        <span className="text-5xl font-black tracking-tight text-white drop-shadow-[0_4px_0_rgba(15,23,42,0.35)] sm:text-6xl">
-          {game.score}
-        </span>
-      </div>
-
-      {game.phase === "ready" && (
-        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/10 px-6 text-center">
-          <div className="rounded-3xl border border-white/35 bg-slate-950/75 px-7 py-6 shadow-2xl backdrop-blur-sm">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-yellow-300 text-slate-900 shadow-lg">
-              <Bird className="size-8" />
-            </div>
-            <h2 className="mt-4 text-2xl font-black uppercase tracking-tight text-white">Toque para voar</h2>
-            <p className="mt-2 text-sm text-slate-200">Passe pelos canos e não encoste no chão.</p>
-          </div>
-        </div>
-      )}
-
-      {game.phase === "gameover" && (
-        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/45 px-6 text-center backdrop-blur-[2px]">
-          <div className="w-full max-w-[250px] rounded-3xl border border-white/20 bg-slate-950/90 p-6 shadow-2xl">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-orange-400 text-slate-950">
-              <Bird className="size-6" />
-            </div>
-            <p className="mt-3 text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">Fim de jogo</p>
-            <p className="mt-1 text-5xl font-black text-white">{game.score}</p>
-            <p className="mt-1 text-sm text-slate-300">pontos conquistados</p>
-            <Button
-              type="button"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onAction();
-              }}
-              className="mt-5 h-11 w-full rounded-xl bg-yellow-300 font-black text-slate-950 hover:bg-yellow-200"
-            >
-              <RotateCcw className="size-4" /> Jogar novamente
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
+  );
+}
+
+function AssetIcon({ asset, size = 'size-10' }: { asset: Asset; size?: string }) {
+  const Icon = asset.icon;
+
+  return (
+    <div className={`flex ${size} shrink-0 items-center justify-center rounded-xl ${asset.iconClass}`}>
+      <Icon className='size-5' />
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  change,
+  icon: Icon,
+  iconClass,
+}: {
+  label: string;
+  value: string;
+  change: string;
+  icon: LucideIcon;
+  iconClass: string;
+}) {
+  return (
+    <Card className='border-white/[0.08] bg-white/[0.035] shadow-none'>
+      <CardContent className='p-5'>
+        <div className='flex items-start justify-between'>
+          <div>
+            <p className='text-sm text-slate-400'>{label}</p>
+            <p className='mt-2 text-2xl font-bold tracking-tight text-white'>{value}</p>
+          </div>
+          <div className={`flex size-10 items-center justify-center rounded-xl ${iconClass}`}>
+            <Icon className='size-5' />
+          </div>
+        </div>
+        <div className='mt-4 flex items-center gap-1.5 text-xs font-semibold text-emerald-300'>
+          <TrendingUp className='size-3.5' />
+          {change}
+          <span className='font-normal text-slate-500'>nos últimos 30 dias</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function Index() {
-  const gameRef = useRef<GameState>(createInitialGame());
-  const [game, setGame] = useState<GameState>(() => copyGame(gameRef.current));
-  const [best, setBest] = useState(0);
+  const [activeNav, setActiveNav] = useState('Visão geral');
+  const [showBalance, setShowBalance] = useState(true);
+  const [selectedSymbol, setSelectedSymbol] = useState('BTC');
+  const [orderType, setOrderType] = useState<'Comprar' | 'Vender'>('Comprar');
+  const [orderAmount, setOrderAmount] = useState('');
+  const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-    try {
-      const savedBest = Number(window.localStorage.getItem("flap-best") ?? 0);
-      setBest(Number.isFinite(savedBest) ? savedBest : 0);
-    } catch {
-      setBest(0);
-    }
-  }, []);
+  const selectedAsset = useMemo(
+    () => marketAssets.find((asset) => asset.symbol === selectedSymbol) ?? marketAssets[0],
+    [selectedSymbol],
+  );
 
-  const beginGame = useCallback(() => {
-    const next = createInitialGame();
-    next.phase = "playing";
-    next.bird.vy = FLAP_FORCE;
-    gameRef.current = next;
-    setGame(copyGame(next));
-  }, []);
+  const portfolioValue = marketAssets.reduce((total, asset) => total + asset.holdings, 0);
+  const visibleBalance = showBalance ? formatCurrency.format(portfolioValue) : '••••••••';
 
-  const handleAction = useCallback(() => {
-    const current = gameRef.current;
+  function handleTrade(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const amount = Number(orderAmount.replace(',', '.'));
 
-    if (current.phase === "gameover") {
-      beginGame();
+    if (!amount || amount <= 0) {
+      setNotice('Informe um valor válido para continuar.');
       return;
     }
 
-    if (current.phase === "ready") {
-      current.phase = "playing";
+    setNotice(`${orderType} de ${formatCurrency.format(amount)} em ${selectedAsset.symbol} simulada com sucesso.`);
+    setOrderAmount('');
+  }
+
+  function handleNav(label: string) {
+    setActiveNav(label);
+    if (label !== 'Visão geral') {
+      setNotice(`${label} está disponível nesta demonstração do NexoCrypto.`);
     }
-
-    current.bird.vy = FLAP_FORCE;
-    setGame(copyGame(current));
-  }, [beginGame]);
-
-  useEffect(() => {
-    let animationFrame = 0;
-    let previousTime = performance.now();
-
-    const tick = (time: number) => {
-      const delta = Math.min((time - previousTime) / 1000, 0.034);
-      previousTime = time;
-      const current = gameRef.current;
-
-      if (current.phase === "playing") {
-        current.bird.vy += GRAVITY * delta;
-        current.bird.y += current.bird.vy * delta;
-
-        current.pipes.forEach((pipe) => {
-          pipe.x -= PIPE_SPEED * delta;
-
-          if (!pipe.passed && pipe.x + PIPE_WIDTH < current.bird.x) {
-            pipe.passed = true;
-            current.score += 1;
-          }
-        });
-
-        current.pipes = current.pipes.filter((pipe) => pipe.x > -PIPE_WIDTH - 12);
-        const lastPipe = current.pipes[current.pipes.length - 1];
-        if (!lastPipe || lastPipe.x < WORLD_WIDTH - 170) {
-          current.pipes.push({
-            id: Date.now(),
-            x: lastPipe ? lastPipe.x + 220 : WORLD_WIDTH + 50,
-            gapY: randomGap(),
-            passed: false,
-          });
-        }
-
-        const birdLeft = current.bird.x;
-        const birdRight = birdLeft + BIRD_SIZE;
-        const birdTop = current.bird.y;
-        const birdBottom = birdTop + BIRD_SIZE;
-        const hitGround = birdTop < -8 || birdBottom > GROUND_Y;
-        const hitPipe = current.pipes.some((pipe) => {
-          const overlapsX = pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft;
-          const gapTop = pipe.gapY - PIPE_GAP / 2;
-          const gapBottom = pipe.gapY + PIPE_GAP / 2;
-          return overlapsX && (birdTop < gapTop || birdBottom > gapBottom);
-        });
-
-        if (hitGround || hitPipe) {
-          current.phase = "gameover";
-          setBest((previousBest) => {
-            const nextBest = Math.max(previousBest, current.score);
-            try {
-              window.localStorage.setItem("flap-best", String(nextBest));
-            } catch {
-              // O recorde continua funcionando durante a sessão mesmo sem armazenamento local.
-            }
-            return nextBest;
-          });
-        }
-
-        setGame(copyGame(current));
-      }
-
-      animationFrame = window.requestAnimationFrame(tick);
-    };
-
-    animationFrame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "Space" || event.code === "ArrowUp") {
-        event.preventDefault();
-        handleAction();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleAction]);
+  }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-slate-950 text-white">
-      <header className="border-b border-white/10 bg-slate-950/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:h-20 sm:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 rotate-[-6deg] items-center justify-center rounded-xl border-2 border-slate-900 bg-yellow-300 text-slate-950 shadow-[3px_3px_0_#0f172a]">
-              <Bird className="size-6" />
+    <div className='min-h-screen bg-[#08100f] text-slate-100'>
+      <div className='flex min-h-screen'>
+        <aside className='hidden w-64 shrink-0 flex-col border-r border-white/[0.07] bg-[#0b1513] lg:flex'>
+          <div className='flex h-20 items-center border-b border-white/[0.07] px-6'>
+            <div className='flex items-center gap-3'>
+              <div className='flex size-9 items-center justify-center rounded-xl bg-emerald-400 text-slate-950 shadow-[0_0_24px_rgba(52,211,153,0.2)]'>
+                <Zap className='size-5 fill-current' />
+              </div>
+              <div>
+                <p className='text-lg font-black tracking-tight text-white'>Nexo<span className='text-emerald-400'>Crypto</span></p>
+                <p className='text-[9px] font-bold uppercase tracking-[0.24em] text-slate-500'>Digital assets</p>
+              </div>
             </div>
-            <span className="text-2xl font-black tracking-[-0.08em] text-yellow-300">FLAP!</span>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-            <Trophy className="size-4 text-yellow-300" />
-            <span>Recorde: {best}</span>
+
+          <div className='flex-1 px-4 py-7'>
+            <p className='mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600'>Menu principal</p>
+            <nav className='space-y-1'>
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeNav === item.label;
+
+                return (
+                  <button
+                    key={item.label}
+                    type='button'
+                    onClick={() => handleNav(item.label)}
+                    className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
+                      isActive
+                        ? 'bg-emerald-400/10 text-emerald-300 shadow-[inset_3px_0_0_#34d399]'
+                        : 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
+                    }`}
+                  >
+                    <Icon className='size-[18px]' />
+                    {item.label}
+                    {item.label === 'Mercado' && <span className='ml-auto size-1.5 rounded-full bg-emerald-400' />}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className='mt-10 rounded-2xl border border-emerald-400/15 bg-gradient-to-br from-emerald-400/10 to-transparent p-4'>
+              <div className='flex size-9 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300'>
+                <ShieldCheck className='size-5' />
+              </div>
+              <p className='mt-4 text-sm font-semibold text-white'>Sua segurança importa</p>
+              <p className='mt-1 text-xs leading-5 text-slate-500'>Ative a autenticação em duas etapas para proteger sua conta.</p>
+              <button type='button' className='mt-3 flex cursor-pointer items-center gap-1 text-xs font-bold text-emerald-300 hover:text-emerald-200'>
+                Ver configurações <ChevronRight className='size-3.5' />
+              </button>
+            </div>
           </div>
+
+          <div className='border-t border-white/[0.07] p-4'>
+            <button type='button' className='flex w-full cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/[0.04]'>
+              <div className='flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-cyan-500 text-sm font-bold text-slate-950'>MS</div>
+              <div className='min-w-0 flex-1'>
+                <p className='truncate text-sm font-semibold text-white'>Marina Silva</p>
+                <p className='truncate text-xs text-slate-500'>Plano Premium</p>
+              </div>
+              <MoreHorizontal className='size-4 text-slate-500' />
+            </button>
+          </div>
+        </aside>
+
+        <div className='min-w-0 flex-1'>
+          <header className='sticky top-0 z-20 border-b border-white/[0.07] bg-[#08100f]/90 backdrop-blur-xl'>
+            <div className='flex h-20 items-center justify-between gap-4 px-5 sm:px-8 xl:px-10'>
+              <div className='flex items-center gap-3'>
+                <button type='button' className='flex size-10 cursor-pointer items-center justify-center rounded-xl border border-white/10 text-slate-300 lg:hidden'>
+                  <Menu className='size-5' />
+                </button>
+                <div className='lg:hidden'>
+                  <p className='text-lg font-black tracking-tight text-white'>Nexo<span className='text-emerald-400'>Crypto</span></p>
+                </div>
+                <div className='hidden items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-slate-500 md:flex md:w-64'>
+                  <Search className='size-4' />
+                  <span>Buscar ativo, recurso...</span>
+                  <span className='ml-auto rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600'>⌘ K</span>
+                </div>
+              </div>
+
+              <div className='flex items-center gap-2 sm:gap-3'>
+                <div className='hidden items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs font-medium text-emerald-300 sm:flex'>
+                  <span className='size-2 animate-pulse rounded-full bg-emerald-400' /> Mercado aberto
+                </div>
+                <button type='button' className='relative flex size-10 cursor-pointer items-center justify-center rounded-xl border border-white/[0.08] text-slate-400 transition hover:bg-white/[0.05] hover:text-white'>
+                  <Bell className='size-[18px]' />
+                  <span className='absolute right-2 top-2 size-1.5 rounded-full bg-emerald-400' />
+                </button>
+                <div className='flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-cyan-500 text-sm font-bold text-slate-950'>MS</div>
+              </div>
+            </div>
+            <div className='flex gap-1 overflow-x-auto border-t border-white/[0.05] px-5 py-2 lg:hidden'>
+              {navItems.slice(0, 4).map((item) => (
+                <button
+                  key={item.label}
+                  type='button'
+                  onClick={() => handleNav(item.label)}
+                  className={`shrink-0 cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold ${activeNav === item.label ? 'bg-emerald-400/10 text-emerald-300' : 'text-slate-500'}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </header>
+
+          <main className='mx-auto max-w-[1500px] px-5 py-8 sm:px-8 xl:px-10'>
+            <div className='mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end'>
+              <div>
+                <div className='mb-2 flex items-center gap-2 text-sm text-slate-500'>
+                  <span>Dashboard</span>
+                  <ChevronRight className='size-3.5' />
+                  <span className='text-emerald-300'>{activeNav}</span>
+                </div>
+                <h1 className='text-3xl font-bold tracking-tight text-white sm:text-4xl'>Olá, Marina <span className='inline-block'>👋</span></h1>
+                <p className='mt-2 text-sm text-slate-500'>Acompanhe seus ativos e encontre novas oportunidades.</p>
+              </div>
+              <div className='flex gap-2'>
+                <Button variant='outline' className='border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07] hover:text-white'>
+                  <RefreshCw className='size-4' /> Atualizar
+                </Button>
+                <Button className='bg-emerald-400 font-bold text-slate-950 hover:bg-emerald-300'>
+                  <Plus className='size-4' /> Adicionar fundos
+                </Button>
+              </div>
+            </div>
+
+            {notice && (
+              <div className='mb-6 flex items-center justify-between rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200'>
+                <span>{notice}</span>
+                <button type='button' onClick={() => setNotice('')} className='cursor-pointer text-emerald-300 hover:text-white'>×</button>
+              </div>
+            )}
+
+            <section className='grid gap-5 xl:grid-cols-[1.45fr_1fr_1fr]'>
+              <Card className='relative overflow-hidden border-emerald-400/20 bg-gradient-to-br from-emerald-500/20 via-[#10241f] to-[#0d1715] shadow-none'>
+                <div className='pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-emerald-400/10 blur-3xl' />
+                <CardContent className='relative p-6'>
+                  <div className='flex items-start justify-between'>
+                    <div>
+                      <div className='flex items-center gap-2 text-sm text-emerald-100/70'>
+                        Saldo total <button type='button' onClick={() => setShowBalance((value) => !value)} className='cursor-pointer text-emerald-200 hover:text-white'>{showBalance ? <Eye className='size-4' /> : <EyeOff className='size-4' />}</button>
+                      </div>
+                      <p className='mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl'>{visibleBalance}</p>
+                      <div className='mt-3 flex items-center gap-2 text-sm'>
+                        <span className='flex items-center gap-1 font-semibold text-emerald-300'><TrendingUp className='size-3.5' /> +8,42%</span>
+                        <span className='text-emerald-100/45'>este mês</span>
+                      </div>
+                    </div>
+                    <div className='flex size-11 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300'>
+                      <WalletCards className='size-5' />
+                    </div>
+                  </div>
+                  <div className='mt-8 flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-emerald-100/60'>
+                    <span className='size-1.5 rounded-full bg-emerald-400' /> Atualizado agora
+                    <span className='ml-auto flex items-center gap-1 text-emerald-200/60'><Copy className='size-3' /> 0x83...A91F</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <MetricCard label='Lucro não realizado' value={formatCurrency.format(1248.72)} change='+12,64%' icon={TrendingUp} iconClass='bg-emerald-400/10 text-emerald-300' />
+              <MetricCard label='Rendimento estimado' value={formatCurrency.format(486.2)} change='+6,18%' icon={Sparkles} iconClass='bg-violet-400/10 text-violet-300' />
+            </section>
+
+            <section className='mt-7 grid gap-6 xl:grid-cols-[1.6fr_1fr]'>
+              <Card className='border-white/[0.08] bg-white/[0.035] shadow-none'>
+                <CardHeader className='flex-row items-center justify-between space-y-0 p-6 pb-3'>
+                  <div>
+                    <CardTitle className='text-base text-white'>Distribuição do portfólio</CardTitle>
+                    <p className='mt-1 text-xs text-slate-500'>Seus ativos por valor atual</p>
+                  </div>
+                  <button type='button' className='flex cursor-pointer items-center gap-1 text-xs font-semibold text-slate-400 hover:text-white'>Últimos 30 dias <ChevronDown className='size-3.5' /></button>
+                </CardHeader>
+                <CardContent className='grid items-center gap-8 p-6 pt-4 md:grid-cols-[220px_1fr]'>
+                  <div className='relative mx-auto flex size-48 items-center justify-center rounded-full' style={{ background: 'conic-gradient(#f97316 0 43%, #818cf8 43% 68%, #22d3ee 68% 84%, #34d399 84% 100%)' }}>
+                    <div className='flex size-32 flex-col items-center justify-center rounded-full bg-[#101b18]'>
+                      <span className='text-xs text-slate-500'>Total</span>
+                      <span className='mt-1 text-lg font-bold text-white'>{formatCurrency.format(portfolioValue)}</span>
+                    </div>
+                  </div>
+                  <div className='space-y-4'>
+                    {marketAssets.map((asset, index) => {
+                      const percentage = [43, 25, 16, 16][index];
+                      return (
+                        <div key={asset.symbol} className='flex items-center gap-3'>
+                          <AssetIcon asset={asset} size='size-8' />
+                          <div className='min-w-0 flex-1'>
+                            <div className='flex items-center justify-between gap-3 text-sm'>
+                              <span className='font-semibold text-white'>{asset.symbol}</span>
+                              <span className='text-slate-400'>{percentage}%</span>
+                            </div>
+                            <div className='mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]'>
+                              <div className={`h-full rounded-full ${index === 0 ? 'bg-orange-400' : index === 1 ? 'bg-indigo-400' : index === 2 ? 'bg-cyan-400' : 'bg-emerald-400'}`} style={{ width: `${percentage}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className='border-white/[0.08] bg-white/[0.035] shadow-none'>
+                <CardHeader className='flex-row items-center justify-between space-y-0 p-6 pb-3'>
+                  <div>
+                    <CardTitle className='text-base text-white'>Comprar e vender</CardTitle>
+                    <p className='mt-1 text-xs text-slate-500'>Operação rápida</p>
+                  </div>
+                  <Badge className='border-emerald-400/20 bg-emerald-400/10 text-[10px] text-emerald-300'>Simulação</Badge>
+                </CardHeader>
+                <CardContent className='p-6 pt-3'>
+                  <div className='mb-5 grid grid-cols-2 rounded-xl bg-white/[0.04] p-1'>
+                    {(['Comprar', 'Vender'] as const).map((type) => (
+                      <button key={type} type='button' onClick={() => setOrderType(type)} className={`cursor-pointer rounded-lg py-2 text-sm font-semibold transition ${orderType === type ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}>{type}</button>
+                    ))}
+                  </div>
+                  <button type='button' onClick={() => setSelectedSymbol(selectedAsset.symbol === 'BTC' ? 'ETH' : 'BTC')} className='flex w-full cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-left transition hover:border-emerald-400/30'>
+                    <AssetIcon asset={selectedAsset} size='size-9' />
+                    <div className='flex-1'>
+                      <p className='text-sm font-semibold text-white'>{selectedAsset.name}</p>
+                      <p className='text-xs text-slate-500'>{selectedAsset.symbol}/BRL</p>
+                    </div>
+                    <ChevronDown className='size-4 text-slate-500' />
+                  </button>
+                  <form onSubmit={handleTrade} className='mt-4'>
+                    <div className='rounded-xl border border-white/[0.08] bg-white/[0.025] p-3'>
+                      <div className='flex items-center justify-between text-xs text-slate-500'><span>Valor em BRL</span><span>Disponível: {formatCurrency.format(2450.8)}</span></div>
+                      <div className='mt-2 flex items-center gap-2'>
+                        <span className='text-xl font-bold text-slate-400'>R$</span>
+                        <input value={orderAmount} onChange={(event) => setOrderAmount(event.target.value)} inputMode='decimal' placeholder='0,00' className='w-full bg-transparent text-2xl font-bold text-white outline-none placeholder:text-slate-700' />
+                      </div>
+                    </div>
+                    <Button type='submit' className={`mt-4 h-11 w-full font-bold ${orderType === 'Comprar' ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'bg-rose-400 text-slate-950 hover:bg-rose-300'}`}>
+                      {orderType} {selectedAsset.symbol}
+                      <ArrowUpRight className='size-4' />
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className='mt-7 grid gap-6 xl:grid-cols-[1.6fr_1fr]'>
+              <Card className='border-white/[0.08] bg-white/[0.035] shadow-none'>
+                <CardHeader className='flex-row items-center justify-between space-y-0 p-6 pb-4'>
+                  <div>
+                    <CardTitle className='text-base text-white'>Mercado em destaque</CardTitle>
+                    <p className='mt-1 text-xs text-slate-500'>Acompanhe os ativos mais importantes</p>
+                  </div>
+                  <button type='button' onClick={() => handleNav('Mercado')} className='flex cursor-pointer items-center gap-1 text-xs font-bold text-emerald-300 hover:text-emerald-200'>Ver mercado <ArrowUpRight className='size-3.5' /></button>
+                </CardHeader>
+                <CardContent className='p-0'>
+                  <div className='hidden grid-cols-[1.5fr_1fr_0.8fr_0.9fr_70px] gap-4 border-y border-white/[0.06] px-6 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 sm:grid'>
+                    <span>Ativo</span><span>Preço</span><span>24h</span><span>Gráfico</span><span />
+                  </div>
+                  <div className='divide-y divide-white/[0.05]'>
+                    {marketAssets.map((asset) => (
+                      <button key={asset.symbol} type='button' onClick={() => setSelectedSymbol(asset.symbol)} className={`grid w-full cursor-pointer items-center gap-4 px-6 py-4 text-left transition sm:grid-cols-[1.5fr_1fr_0.8fr_0.9fr_70px] ${selectedSymbol === asset.symbol ? 'bg-emerald-400/[0.04]' : 'hover:bg-white/[0.025]'}`}>
+                        <div className='flex items-center gap-3'>
+                          <AssetIcon asset={asset} size='size-9' />
+                          <div><p className='text-sm font-bold text-white'>{asset.symbol}</p><p className='text-xs text-slate-500'>{asset.name}</p></div>
+                        </div>
+                        <div className='text-sm font-semibold text-slate-200'>{formatCurrency.format(asset.price)}</div>
+                        <div className={`flex items-center gap-1 text-sm font-semibold ${asset.change >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{asset.change >= 0 ? <TrendingUp className='size-3.5' /> : <TrendingDown className='size-3.5' />}{asset.change >= 0 ? '+' : ''}{formatNumber.format(asset.change)}%</div>
+                        <div className='hidden sm:block'><Sparkline points={asset.spark} positive={asset.change >= 0} /></div>
+                        <MoreHorizontal className='hidden size-4 justify-self-end text-slate-500 sm:block' />
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className='border-white/[0.08] bg-white/[0.035] shadow-none'>
+                <CardHeader className='flex-row items-center justify-between space-y-0 p-6 pb-4'>
+                  <div><CardTitle className='text-base text-white'>Atividade recente</CardTitle><p className='mt-1 text-xs text-slate-500'>Suas últimas movimentações</p></div>
+                  <button type='button' className='cursor-pointer text-xs font-bold text-emerald-300 hover:text-emerald-200'>Ver tudo</button>
+                </CardHeader>
+                <CardContent className='space-y-5 p-6 pt-2'>
+                  <div className='flex items-center gap-3'><div className='flex size-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300'><ArrowDownToLine className='size-4' /></div><div className='min-w-0 flex-1'><p className='text-sm font-semibold text-white'>Depósito recebido</p><p className='text-xs text-slate-500'>Hoje, 10:42</p></div><div className='text-right'><p className='text-sm font-semibold text-emerald-300'>+ R$ 850,00</p><p className='text-xs text-slate-600'>BRL</p></div></div>
+                  <div className='flex items-center gap-3'><div className='flex size-9 items-center justify-center rounded-xl bg-orange-400/10 text-orange-300'><Bitcoin className='size-4' /></div><div className='min-w-0 flex-1'><p className='text-sm font-semibold text-white'>Compra de BTC</p><p className='text-xs text-slate-500'>Ontem, 16:28</p></div><div className='text-right'><p className='text-sm font-semibold text-white'>- R$ 420,00</p><p className='text-xs text-slate-600'>0,0012 BTC</p></div></div>
+                  <div className='flex items-center gap-3'><div className='flex size-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300'><ArrowUpFromLine className='size-4' /></div><div className='min-w-0 flex-1'><p className='text-sm font-semibold text-white'>Retirada enviada</p><p className='text-xs text-slate-500'>12 jun, 09:15</p></div><div className='text-right'><p className='text-sm font-semibold text-white'>- R$ 120,00</p><p className='text-xs text-slate-600'>Concluída</p></div></div>
+                  <div className='flex items-center gap-3'><div className='flex size-9 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300'><Clock3 className='size-4' /></div><div className='min-w-0 flex-1'><p className='text-sm font-semibold text-white'>Rendimento creditado</p><p className='text-xs text-slate-500'>10 jun, 08:00</p></div><div className='text-right'><p className='text-sm font-semibold text-emerald-300'>+ R$ 36,42</p><p className='text-xs text-slate-600'>USDT</p></div></div>
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className='mt-7 grid gap-4 sm:grid-cols-3'>
+              <button type='button' className='group flex cursor-pointer items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 text-left transition hover:border-emerald-400/25 hover:bg-emerald-400/[0.04]'><div className='flex size-10 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300'><ArrowDownToLine className='size-5' /></div><div className='flex-1'><p className='text-sm font-bold text-white'>Depositar</p><p className='mt-1 text-xs text-slate-500'>Adicione saldo à carteira</p></div><ChevronRight className='size-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-emerald-300' /></button>
+              <button type='button' className='group flex cursor-pointer items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 text-left transition hover:border-emerald-400/25 hover:bg-emerald-400/[0.04]'><div className='flex size-10 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300'><ArrowUpFromLine className='size-5' /></div><div className='flex-1'><p className='text-sm font-bold text-white'>Retirar</p><p className='mt-1 text-xs text-slate-500'>Envie para sua conta</p></div><ChevronRight className='size-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-emerald-300' /></button>
+              <button type='button' className='group flex cursor-pointer items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 text-left transition hover:border-emerald-400/25 hover:bg-emerald-400/[0.04]'><div className='flex size-10 items-center justify-center rounded-xl bg-orange-400/10 text-orange-300'><Sparkles className='size-5' /></div><div className='flex-1'><p className='text-sm font-bold text-white'>Ganhe até 12%</p><p className='mt-1 text-xs text-slate-500'>Veja nossas oportunidades</p></div><ChevronRight className='size-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-emerald-300' /></button>
+            </section>
+
+            <footer className='mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/[0.07] py-6 text-xs text-slate-600 sm:flex-row'>
+              <p>© 2024 NexoCrypto. Invista com clareza.</p>
+              <div className='flex items-center gap-4'><span className='flex items-center gap-1.5'><ShieldCheck className='size-3.5 text-emerald-400' /> Ambiente seguro</span><span>Termos</span><span>Privacidade</span></div>
+            </footer>
+          </main>
         </div>
-      </header>
-
-      <main className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[1fr_430px] lg:items-center lg:gap-16 lg:py-20">
-        <section className="max-w-xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-yellow-300/25 bg-yellow-300/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-yellow-300">
-            <Gamepad2 className="size-4" /> Jogo rápido para celular
-          </div>
-          <h1 className="mt-6 text-5xl font-black leading-[0.95] tracking-[-0.06em] text-white sm:text-7xl">
-            Voe alto.
-            <br />
-            <span className="text-yellow-300">Não caia.</span>
-          </h1>
-          <p className="mt-6 max-w-md text-base leading-7 text-slate-400 sm:text-lg">
-            Um toque mantém o passarinho no ar. Desvie dos canos, conquiste pontos e tente superar o seu melhor voo.
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button
-              type="button"
-              onClick={handleAction}
-              className="h-12 rounded-xl bg-yellow-300 px-6 font-black text-slate-950 shadow-[0_8px_0_rgb(161,98,7)] transition hover:bg-yellow-200 active:translate-y-1 active:shadow-[0_4px_0_rgb(161,98,7)]"
-            >
-              <Bird className="size-5" /> {game.phase === "playing" ? "Bater asas" : "Começar a jogar"}
-            </Button>
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 px-4 text-sm text-slate-400">
-              <span className="hidden size-2 rounded-full bg-emerald-400 sm:block" />
-              Toque ou pressione espaço
-            </div>
-          </div>
-
-          <div className="mt-12 grid max-w-md grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <Medal className="size-5 text-yellow-300" />
-              <p className="mt-3 text-2xl font-black text-white">{game.score}</p>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Voo atual</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <Trophy className="size-5 text-yellow-300" />
-              <p className="mt-3 text-2xl font-black text-white">{best}</p>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Melhor voo</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="relative mx-auto w-full max-w-[390px] lg:justify-self-end">
-          <div className="absolute -inset-8 -z-10 rounded-full bg-yellow-300/10 blur-3xl" />
-          <GameBoard game={game} onAction={handleAction} />
-          <p className="mt-5 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-            Toque na tela para bater as asas
-          </p>
-        </section>
-      </main>
-
-      <footer className="border-t border-white/10 px-5 py-6 text-center text-xs text-slate-600 sm:px-8">
-        Cada voo é uma nova chance de chegar mais longe.
-      </footer>
+      </div>
     </div>
   );
 }
