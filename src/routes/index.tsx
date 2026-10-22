@@ -196,6 +196,7 @@ type UserRole = 'admin' | 'cliente';
 type DemoSession = {
   role: UserRole;
   email: string;
+  name?: string;
 };
 
 const demoAccess: Record<UserRole, { email: string; password: string }> = {
@@ -209,22 +210,123 @@ const demoAccess: Record<UserRole, { email: string; password: string }> = {
   },
 };
 
-function LoginScreen({ onLogin }: { onLogin: (role: UserRole, email: string) => void }) {
+type RegisteredUser = {
+  email: string;
+  password: string;
+  name: string;
+};
+
+function LoginScreen({ onLogin }: { onLogin: (role: UserRole, email: string, name?: string) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<UserRole>('cliente');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+
+  function readRegisteredUsers(): RegisteredUser[] {
+    const savedUsers = window.localStorage.getItem('nexocrypto-users');
+
+    if (!savedUsers) {
+      return [];
+    }
+
+    try {
+      const parsedUsers = JSON.parse(savedUsers) as unknown;
+
+      if (!Array.isArray(parsedUsers)) {
+        return [];
+      }
+
+      return parsedUsers
+        .filter((user): user is Record<string, unknown> => {
+          if (!user || typeof user !== 'object') {
+            return false;
+          }
+
+          const candidate = user as Record<string, unknown>;
+          return typeof candidate.email === 'string' && typeof candidate.password === 'string' && typeof candidate.name === 'string';
+        })
+        .map((user) => ({
+          email: user.email as string,
+          password: user.password as string,
+          name: user.name as string,
+        }));
+    } catch {
+      window.localStorage.removeItem('nexocrypto-users');
+      return [];
+    }
+  }
+
+  function changeMode(nextMode: 'login' | 'register') {
+    setMode(nextMode);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+
+    if (nextMode === 'login') {
+      setName('');
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const credentials = demoAccess[role];
+    setError('');
 
-    if (email.trim().toLowerCase() !== credentials.email || password !== credentials.password) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (mode === 'register') {
+      const normalizedName = name.trim();
+      const registeredUsers = readRegisteredUsers();
+      const emailAlreadyUsed = registeredUsers.some((user) => user.email === normalizedEmail) || Object.values(demoAccess).some((credentials) => credentials.email === normalizedEmail);
+
+      if (normalizedName.length < 2) {
+        setError('Informe seu nome para criar a conta.');
+        return;
+      }
+
+      if (password.length < 6) {
+        setError('A senha deve ter pelo menos 6 caracteres.');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError('As senhas não conferem.');
+        return;
+      }
+
+      if (emailAlreadyUsed) {
+        setError('Este e-mail já está cadastrado. Faça login para continuar.');
+        return;
+      }
+
+      const nextUser = {
+        email: normalizedEmail,
+        password,
+        name: normalizedName,
+      };
+
+      window.localStorage.setItem('nexocrypto-users', JSON.stringify([...registeredUsers, nextUser]));
+      onLogin('cliente', nextUser.email, nextUser.name);
+      return;
+    }
+
+    const credentials = demoAccess[role];
+    const registeredUser = readRegisteredUsers().find((user) => user.email === normalizedEmail);
+    const isDemoAccess = normalizedEmail === credentials.email && password === credentials.password;
+    const isRegisteredAccess = role === 'cliente' && registeredUser?.password === password;
+
+    if (!isDemoAccess && !isRegisteredAccess) {
       setError('Confira o perfil, e-mail e senha informados.');
       return;
     }
 
-    onLogin(role, credentials.email);
+    onLogin(
+      role,
+      isRegisteredAccess ? registeredUser.email : credentials.email,
+      isRegisteredAccess ? registeredUser.name : undefined,
+    );
   }
 
   const accessHint = role === 'admin'
@@ -245,33 +347,71 @@ function LoginScreen({ onLogin }: { onLogin: (role: UserRole, email: string) => 
               <Zap className='size-7 fill-current' />
             </div>
             <p className='mt-5 text-2xl font-black tracking-tight text-white'>Nexo<span className='text-emerald-400'>Crypto</span></p>
-            <p className='mt-2 text-sm text-slate-500'>Entre para acompanhar sua carteira</p>
+            <p className='mt-2 text-sm text-slate-500'>{mode === 'login' ? 'Entre para acompanhar sua carteira' : 'Crie sua conta para começar'}</p>
           </div>
 
           <div className='mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5'>
             <button
               type='button'
-              onClick={() => {
-                setRole('cliente');
-                setError('');
-              }}
-              className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'cliente' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+              onClick={() => changeMode('login')}
+              className={`cursor-pointer rounded-xl px-3 py-3 text-sm font-semibold transition ${mode === 'login' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
             >
-              <UserRound className='size-4' /> Cliente
+              Entrar
             </button>
             <button
               type='button'
-              onClick={() => {
-                setRole('admin');
-                setError('');
-              }}
-              className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'admin' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+              onClick={() => changeMode('register')}
+              className={`cursor-pointer rounded-xl px-3 py-3 text-sm font-semibold transition ${mode === 'register' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
             >
-              <ShieldCheck className='size-4' /> ADM
+              Criar conta
             </button>
           </div>
 
+          {mode === 'login' && (
+            <div className='mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5'>
+              <button
+                type='button'
+                onClick={() => {
+                  setRole('cliente');
+                  setError('');
+                }}
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'cliente' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+              >
+                <UserRound className='size-4' /> Cliente
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  setRole('admin');
+                  setError('');
+                }}
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'admin' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+              >
+                <ShieldCheck className='size-4' /> ADM
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className='space-y-4'>
+            {mode === 'register' && (
+              <div>
+                <label htmlFor='register-name' className='mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500'>Nome</label>
+                <div className='flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] px-3'>
+                  <UserRound className='size-4 text-slate-500' />
+                  <input
+                    id='register-name'
+                    type='text'
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder='Seu nome completo'
+                    autoComplete='name'
+                    className='h-12 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-700'
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor='login-email' className='mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500'>E-mail</label>
               <div className='flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] px-3'>
@@ -299,27 +439,50 @@ function LoginScreen({ onLogin }: { onLogin: (role: UserRole, email: string) => 
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder='Digite sua senha'
-                  autoComplete='current-password'
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                   className='h-12 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-700'
                   required
                 />
               </div>
             </div>
 
+            {mode === 'register' && (
+              <div>
+                <label htmlFor='register-confirm-password' className='mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500'>Confirmar senha</label>
+                <div className='flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] px-3'>
+                  <LockKeyhole className='size-4 text-slate-500' />
+                  <input
+                    id='register-confirm-password'
+                    type='password'
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder='Digite a senha novamente'
+                    autoComplete='new-password'
+                    className='h-12 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-700'
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             {error && (
               <p className='rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2.5 text-sm text-rose-200'>{error}</p>
             )}
 
             <Button type='submit' className='h-12 w-full bg-emerald-400 font-bold text-slate-950 hover:bg-emerald-300'>
-              Entrar como {role === 'admin' ? 'ADM' : 'cliente'}
-              <LogIn className='size-4' />
+              {mode === 'login' ? `Entrar como ${role === 'admin' ? 'ADM' : 'cliente'}` : 'Criar conta cliente'}
+              {mode === 'login' ? <LogIn className='size-4' /> : <UserRound className='size-4' />}
             </Button>
           </form>
 
-          <div className='mt-6 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-center'>
-            <p className='text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600'>Acesso de demonstração</p>
-            <p className='mt-2 text-xs text-slate-400'>{accessHint}</p>
-          </div>
+          {mode === 'login' ? (
+            <div className='mt-6 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-center'>
+              <p className='text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600'>Acesso de demonstração</p>
+              <p className='mt-2 text-xs text-slate-400'>{accessHint}</p>
+            </div>
+          ) : (
+            <p className='mt-6 text-center text-[11px] leading-5 text-slate-600'>Sua conta de cliente será salva neste dispositivo para a demonstração.</p>
+          )}
 
           <p className='mt-6 text-center text-[11px] leading-5 text-slate-600'>Esta versão usa uma sessão local para demonstração. Conecte um provedor de autenticação para contas reais.</p>
         </CardContent>
@@ -362,10 +525,10 @@ function Index() {
 
   const portfolioValue = marketAssets.reduce((total, asset) => total + asset.holdings, 0);
   const visibleBalance = showBalance ? formatCurrency.format(portfolioValue) : '••••••••';
-  const displayName = session?.role === 'admin' ? 'Admin Nexo' : 'Marina Silva';
+  const displayName = session?.name || (session?.role === 'admin' ? 'Admin Nexo' : 'Marina Silva');
 
-  function handleLogin(role: UserRole, email: string) {
-    const nextSession = { role, email };
+  function handleLogin(role: UserRole, email: string, name?: string) {
+    const nextSession: DemoSession = { role, email, name };
     setSession(nextSession);
     window.localStorage.setItem('nexocrypto-session', JSON.stringify(nextSession));
   }
