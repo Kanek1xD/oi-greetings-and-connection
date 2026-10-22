@@ -28,6 +28,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  UserRound,
   Sparkles,
   TrendingDown,
   TrendingUp,
