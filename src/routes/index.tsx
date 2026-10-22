@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -17,6 +17,10 @@ import {
   Gem,
   LayoutDashboard,
   LineChart,
+  LockKeyhole,
+  LogIn,
+  LogOut,
+  Mail,
   Menu,
   MoreHorizontal,
   Plus,
@@ -186,6 +190,143 @@ function MetricCard({
   );
 }
 
+type UserRole = 'admin' | 'cliente';
+
+type DemoSession = {
+  role: UserRole;
+  email: string;
+};
+
+const demoAccess: Record<UserRole, { email: string; password: string }> = {
+  admin: {
+    email: 'admin@nexocrypto.com',
+    password: 'admin123',
+  },
+  cliente: {
+    email: 'cliente@nexocrypto.com',
+    password: 'cliente123',
+  },
+};
+
+function LoginScreen({ onLogin }: { onLogin: (role: UserRole, email: string) => void }) {
+  const [role, setRole] = useState<UserRole>('cliente');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const credentials = demoAccess[role];
+
+    if (email.trim().toLowerCase() !== credentials.email || password !== credentials.password) {
+      setError('Confira o perfil, e-mail e senha informados.');
+      return;
+    }
+
+    onLogin(role, credentials.email);
+  }
+
+  const accessHint = role === 'admin'
+    ? 'admin@nexocrypto.com / admin123'
+    : 'cliente@nexocrypto.com / cliente123';
+
+  return (
+    <main className='flex min-h-screen items-center justify-center bg-[#08100f] px-4 py-10 text-slate-100'>
+      <div className='pointer-events-none fixed inset-0 overflow-hidden'>
+        <div className='absolute left-1/2 top-0 size-[32rem] -translate-x-1/2 rounded-full bg-emerald-400/10 blur-3xl' />
+        <div className='absolute bottom-0 right-0 size-72 rounded-full bg-cyan-400/5 blur-3xl' />
+      </div>
+
+      <Card className='relative w-full max-w-md border-white/[0.1] bg-[#0d1715]/95 shadow-2xl shadow-emerald-950/30'>
+        <CardContent className='p-6 sm:p-8'>
+          <div className='mb-8 text-center'>
+            <div className='mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 shadow-[0_0_30px_rgba(52,211,153,0.25)]'>
+              <Zap className='size-7 fill-current' />
+            </div>
+            <p className='mt-5 text-2xl font-black tracking-tight text-white'>Nexo<span className='text-emerald-400'>Crypto</span></p>
+            <p className='mt-2 text-sm text-slate-500'>Entre para acompanhar sua carteira</p>
+          </div>
+
+          <div className='mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5'>
+            <button
+              type='button'
+              onClick={() => {
+                setRole('cliente');
+                setError('');
+              }}
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'cliente' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+            >
+              <UserRound className='size-4' /> Cliente
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                setRole('admin');
+                setError('');
+              }}
+              className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition ${role === 'admin' ? 'bg-emerald-400 text-slate-950' : 'text-slate-500 hover:text-white'}`}
+            >
+              <ShieldCheck className='size-4' /> ADM
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className='space-y-4'>
+            <div>
+              <label htmlFor='login-email' className='mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500'>E-mail</label>
+              <div className='flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] px-3'>
+                <Mail className='size-4 text-slate-500' />
+                <input
+                  id='login-email'
+                  type='email'
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder='voce@exemplo.com'
+                  autoComplete='email'
+                  className='h-12 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-700'
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor='login-password' className='mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500'>Senha</label>
+              <div className='flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] px-3'>
+                <LockKeyhole className='size-4 text-slate-500' />
+                <input
+                  id='login-password'
+                  type='password'
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder='Digite sua senha'
+                  autoComplete='current-password'
+                  className='h-12 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-700'
+                  required
+                />
+              </div>
+            </div>
+
+            {error && (
+              <p className='rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2.5 text-sm text-rose-200'>{error}</p>
+            )}
+
+            <Button type='submit' className='h-12 w-full bg-emerald-400 font-bold text-slate-950 hover:bg-emerald-300'>
+              Entrar como {role === 'admin' ? 'ADM' : 'cliente'}
+              <LogIn className='size-4' />
+            </Button>
+          </form>
+
+          <div className='mt-6 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-center'>
+            <p className='text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600'>Acesso de demonstração</p>
+            <p className='mt-2 text-xs text-slate-400'>{accessHint}</p>
+          </div>
+
+          <p className='mt-6 text-center text-[11px] leading-5 text-slate-600'>Esta versão usa uma sessão local para demonstração. Conecte um provedor de autenticação para contas reais.</p>
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
+
 function Index() {
   const [activeNav, setActiveNav] = useState('Visão geral');
   const [showBalance, setShowBalance] = useState(true);
@@ -193,6 +334,25 @@ function Index() {
   const [orderType, setOrderType] = useState<'Comprar' | 'Vender'>('Comprar');
   const [orderAmount, setOrderAmount] = useState('');
   const [notice, setNotice] = useState('');
+  const [session, setSession] = useState<DemoSession | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    const savedSession = window.localStorage.getItem('nexocrypto-session');
+
+    if (savedSession) {
+      try {
+        const parsedSession = JSON.parse(savedSession) as DemoSession;
+        if (parsedSession.role === 'admin' || parsedSession.role === 'cliente') {
+          setSession(parsedSession);
+        }
+      } catch {
+        window.localStorage.removeItem('nexocrypto-session');
+      }
+    }
+
+    setSessionReady(true);
+  }, []);
 
   const selectedAsset = useMemo(
     () => marketAssets.find((asset) => asset.symbol === selectedSymbol) ?? marketAssets[0],
@@ -201,6 +361,18 @@ function Index() {
 
   const portfolioValue = marketAssets.reduce((total, asset) => total + asset.holdings, 0);
   const visibleBalance = showBalance ? formatCurrency.format(portfolioValue) : '••••••••';
+  const displayName = session?.role === 'admin' ? 'Admin Nexo' : 'Marina Silva';
+
+  function handleLogin(role: UserRole, email: string) {
+    const nextSession = { role, email };
+    setSession(nextSession);
+    window.localStorage.setItem('nexocrypto-session', JSON.stringify(nextSession));
+  }
+
+  function handleLogout() {
+    setSession(null);
+    window.localStorage.removeItem('nexocrypto-session');
+  }
 
   function handleTrade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -220,6 +392,21 @@ function Index() {
     if (label !== 'Visão geral') {
       setNotice(`${label} está disponível nesta demonstração do NexoCrypto.`);
     }
+  }
+
+  if (!sessionReady) {
+    return (
+      <div className='flex min-h-screen items-center justify-center bg-[#08100f] text-slate-100'>
+        <div className='text-center'>
+          <div className='mx-auto size-8 animate-pulse rounded-full bg-emerald-400' />
+          <p className='mt-4 text-sm text-slate-500'>Carregando seu acesso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
@@ -277,13 +464,13 @@ function Index() {
           </div>
 
           <div className='border-t border-white/[0.07] p-4'>
-            <button type='button' className='flex w-full cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/[0.04]'>
-              <div className='flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-cyan-500 text-sm font-bold text-slate-950'>MS</div>
+            <button type='button' onClick={handleLogout} title='Sair da conta' className='flex w-full cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/[0.04]'>
+              <div className='flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-cyan-500 text-sm font-bold text-slate-950'>{session.role === 'admin' ? 'AD' : 'MS'}</div>
               <div className='min-w-0 flex-1'>
-                <p className='truncate text-sm font-semibold text-white'>Marina Silva</p>
-                <p className='truncate text-xs text-slate-500'>Plano Premium</p>
+                <p className='truncate text-sm font-semibold text-white'>{displayName}</p>
+                <p className='truncate text-xs text-slate-500'>{session.role === 'admin' ? 'Administrador' : 'Cliente Premium'}</p>
               </div>
-              <MoreHorizontal className='size-4 text-slate-500' />
+              <LogOut className='size-4 text-slate-500' />
             </button>
           </div>
         </aside>
@@ -308,6 +495,10 @@ function Index() {
               <div className='flex items-center gap-2 sm:gap-3'>
                 <div className='hidden items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs font-medium text-emerald-300 sm:flex'>
                   <span className='size-2 animate-pulse rounded-full bg-emerald-400' /> Mercado aberto
+                </div>
+                <div className='hidden items-center gap-2 rounded-full border border-violet-400/15 bg-violet-400/5 px-3 py-2 text-xs font-medium text-violet-300 md:flex'>
+                  {session.role === 'admin' ? <ShieldCheck className='size-3.5' /> : <UserRound className='size-3.5' />}
+                  {session.role === 'admin' ? 'Acesso ADM' : 'Conta cliente'}
                 </div>
                 <button type='button' className='relative flex size-10 cursor-pointer items-center justify-center rounded-xl border border-white/[0.08] text-slate-400 transition hover:bg-white/[0.05] hover:text-white'>
                   <Bell className='size-[18px]' />
@@ -338,7 +529,7 @@ function Index() {
                   <ChevronRight className='size-3.5' />
                   <span className='text-emerald-300'>{activeNav}</span>
                 </div>
-                <h1 className='text-3xl font-bold tracking-tight text-white sm:text-4xl'>Olá, Marina <span className='inline-block'>👋</span></h1>
+                <h1 className='text-3xl font-bold tracking-tight text-white sm:text-4xl'>Olá, {displayName} <span className='inline-block'>👋</span></h1>
                 <p className='mt-2 text-sm text-slate-500'>Acompanhe seus ativos e encontre novas oportunidades.</p>
               </div>
               <div className='flex gap-2'>
