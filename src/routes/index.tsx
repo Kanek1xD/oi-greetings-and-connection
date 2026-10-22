@@ -1,27 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { z } from "zod";
-import { Menu, ShieldCheck, PenTool, Sparkles, AlertTriangle, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useState } from "react";
+import { Cat, Heart, PawPrint, RefreshCw, Sparkles, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { STUDIO_NAME, buildWhatsappLink, isWhatsappConfigured, type BookingRequest } from "@/config/studio";
-import hero from "@/assets/hero.jpg";
-import t1 from "@/assets/tattoo-1.jpg";
-import t2 from "@/assets/tattoo-2.jpg";
-import t3 from "@/assets/tattoo-3.jpg";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Ritual Tattoo Studio — Agende sua tatuagem" },
-      { name: "description", content: "Tatuagem autoral e personalizada com biossegurança rigorosa. Solicite seu agendamento no Ritual Tattoo Studio." },
-      { property: "og:title", content: "Ritual Tattoo Studio — Agende sua tatuagem" },
-      { property: "og:description", content: "Arte personalizada, higiene rigorosa. Envie sua ideia e solicite um horário." },
+      { title: "Miau Club — gatinhos em um clique" },
+      {
+        name: "description",
+        content:
+          "Um site rápido de gatinhos: galeria instantânea, fatos curiosos e muita fofura em um só lugar.",
+      },
+      { property: "og:title", content: "Miau Club — gatinhos em um clique" },
+      {
+        property: "og:description",
+        content: "Galeria de gatinhos carregada na hora, com fatos curiosos sobre felinos.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -29,53 +26,67 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+type Kitty = { id: string; url: string };
+
 const NAV = [
-  { href: "#portfolio", label: "Portfólio" },
-  { href: "#estudio", label: "Estúdio" },
-  { href: "#agendar", label: "Agendar" },
+  { href: "#galeria", label: "Galeria" },
+  { href: "#fatos", label: "Fatos" },
+  { href: "#sobre", label: "Sobre" },
 ];
 
-const ESTILOS = ["Fine line", "Blackwork", "Realismo", "Tradicional / Neo-tradicional", "Lettering", "Aquarela", "Outro / não sei"];
-const TAMANHOS = ["Pequena (até 5 cm)", "Média (5–15 cm)", "Grande (15–30 cm)", "Fechamento / projeto grande"];
-
-const schema = z.object({
-  nome: z.string().trim().min(2, "Informe seu nome").max(100),
-  whatsapp: z.string().trim().refine((v) => { const d = v.replace(/\D/g, ""); return d.length >= 10 && d.length <= 15; }, "WhatsApp inválido (inclua o DDD)"),
-  estilo: z.string().min(1, "Escolha um estilo"),
-  tamanho: z.string().min(1, "Escolha um tamanho"),
-  local: z.string().trim().min(2, "Informe o local do corpo").max(80),
-  ideia: z.string().trim().min(5, "Descreva sua ideia").max(1000),
-  preferencia: z.string().trim().min(2, "Informe sua preferência").max(150),
-});
-
-const selectCls = "flex h-11 w-full rounded-sm border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const FATOS = [
+  {
+    emoji: "😴",
+    titulo: "Dormem 16h por dia",
+    texto:
+      "Gatos passam boa parte da vida dormindo. É instinto: poupar energia para as caçadas — mesmo as de brinquedo.",
+  },
+  {
+    emoji: "🎵",
+    titulo: "O ronronar cura",
+    texto:
+      "A vibração entre 25 e 150 Hz está associada a sensação de calma e até a processos de recuperação óssea.",
+  },
+  {
+    emoji: "👑",
+    titulo: "Umbigo de rainha",
+    texto:
+      "Quando um gato " +
+      "levanta o rabo bem reto para você, é um cumprimento amigável. Sinal de confiança total.",
+  },
+  {
+    emoji: "🚀",
+    titulo: "Salto de 6x o corpo",
+    texto:
+      "As patas traseiras são verdadeiras molas: um gato adulto salta cerca de seis vezes o próprio comprimento.",
+  },
+];
 
 function Header() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <a href="#topo" className="font-display text-xl uppercase tracking-wider">
-          Ritual<span className="text-primary">.</span>
+        <a href="#topo" className="flex items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+          <span className="flex size-9 items-center justify-center rounded-full bg-rose-500/15 text-rose-400">
+            <Cat className="size-5" />
+          </span>
+          Miau<span className="text-rose-400">.</span>Club
         </a>
-        <nav className="hidden items-center gap-8 md:flex">
+
+        <nav className="hidden items-center gap-8 sm:flex">
           {NAV.map((n) => (
-            <a key={n.href} href={n.href} className="text-sm uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground">{n.label}</a>
+            <a
+              key={n.href}
+              href={n.href}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {n.label}
+            </a>
           ))}
-          <Button asChild size="sm"><a href="#agendar">Agendar</a></Button>
+          <Button asChild size="sm" className="rounded-full bg-rose-500 text-white hover:bg-rose-500/90">
+            <a href="#galeria">Ver gatinhos</a>
+          </Button>
         </nav>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menu"><Menu /></Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="bg-background">
-            <SheetTitle className="font-display text-2xl uppercase">Ritual<span className="text-primary">.</span></SheetTitle>
-            <nav className="mt-10 flex flex-col gap-6">
-              {NAV.map((n) => (
-                <a key={n.href} href={n.href} className="font-display text-3xl uppercase">{n.label}</a>
-              ))}
-            </nav>
-          </SheetContent>
-        </Sheet>
       </div>
     </header>
   );
@@ -83,170 +94,193 @@ function Header() {
 
 function Hero() {
   return (
-    <section id="topo" className="relative flex min-h-[92vh] items-end overflow-hidden pt-16">
-      <img src={hero} alt="Tatuador trabalhando no estúdio" width={1600} height={1008} className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-0 bg-hero-overlay" />
-      <div className="relative mx-auto w-full max-w-6xl px-5 pb-20">
-        <p className="eyebrow">Tatuagem autoral · Arte sob medida</p>
-        <h1 className="mt-4 max-w-3xl font-display text-6xl uppercase leading-[0.9] sm:text-8xl">
-          Sua pele,<br />nosso <span className="text-primary">ritual</span>.
+    <section id="topo" className="relative overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-rose-500/20 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 top-32 size-64 rounded-full bg-amber-400/15 blur-3xl"
+      />
+
+      <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs uppercase tracking-widest text-muted-foreground">
+          <Zap className="size-3.5 text-rose-400" /> carrega em menos de um ronronar
+        </span>
+
+        <h1 className="mt-6 max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-7xl">
+          Um site de <span className="text-rose-400">gatinhos</span>,
+          <br />
+          rápido como um bote.
         </h1>
-        <p className="mt-6 max-w-md text-lg text-muted-foreground">
-          Projetos únicos, desenhados para você e executados com biossegurança rigorosa.
+
+        <p className="mt-6 max-w-xl text-lg text-muted-foreground">
+          Fotos novas a cada clique, fatos curiosos e nenhuma enrolação. Aperte o botão e receba
+          uma dose instantânea de fofura.
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild size="lg" className="h-12 px-8 uppercase tracking-widest"><a href="#agendar">Solicitar agendamento</a></Button>
-          <Button asChild size="lg" variant="outline" className="h-12 px-8 uppercase tracking-widest"><a href="#portfolio">Ver portfólio</a></Button>
+
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Button asChild size="lg" className="h-12 rounded-full bg-rose-500 px-7 text-white hover:bg-rose-500/90">
+            <a href="#galeria">
+              <PawPrint className="mr-1" /> Abrir a galeria
+            </a>
+          </Button>
+          <Button
+            asChild
+            size="lg"
+            variant="outline"
+            className="h-12 rounded-full border-border px-7 hover:bg-accent"
+          >
+            <a href="#fatos">Fatos curiosos</a>
+          </Button>
         </div>
+
+        <dl className="mt-14 grid max-w-lg grid-cols-3 gap-4 border-t border-border pt-6">
+          {[
+            { valor: "1", rotulo: "clique para trocar" },
+            { valor: "12", rotulo: "fotos por lote" },
+            { valor: "∞", rotulo: "quantidade de fofura" },
+          ].map((s) => (
+            <div key={s.rotulo}>
+              <dt className="text-2xl font-bold text-foreground">{s.valor}</dt>
+              <dd className="text-xs uppercase tracking-widest text-muted-foreground">{s.rotulo}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );
 }
 
-const WORKS = [
-  { src: t1, title: "Serpente & Rosas", style: "Fine line" },
-  { src: t2, title: "Adaga", style: "Neo-tradicional" },
-  { src: t3, title: "Mariposa", style: "Realismo" },
-];
+function Gallery() {
+  const [kittens, setKittens] = useState<Kitty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-function Portfolio() {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
+    try {
+      const res = await fetch("https://api.thecatapi.com/v1/images/search?limit=12&size=med");
+      if (!res.ok) throw new Error("Não foi possível buscar as fotos");
+      const data = (await res.json()) as Kitty[];
+      if (!Array.isArray(data) || data.length === 0) throw new Error("Resposta vazia");
+      setKittens(data);
+    } catch {
+      setFailed(true);
+      setKittens([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   return (
-    <section id="portfolio" className="mx-auto max-w-6xl px-5 py-24">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
-          <p className="eyebrow">01 — Portfólio</p>
-          <h2 className="mt-3 font-display text-5xl uppercase sm:text-6xl">Trabalhos <span className="font-serif normal-case italic text-primary">recentes</span></h2>
+    <section id="galeria" className="border-y border-border bg-card/40">
+      <div className="mx-auto max-w-6xl px-5 py-20">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-rose-400">01 — Galeria</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+              Gatinhos do momento
+            </h2>
+          </div>
+          <Button
+            onClick={() => void load()}
+            disabled={loading}
+            variant="outline"
+            className="rounded-full border-border"
+          >
+            <RefreshCw className={loading ? "animate-spin" : undefined} />
+            {loading ? "Buscando..." : "Outro lote"}
+          </Button>
         </div>
-        <p className="max-w-sm text-muted-foreground">Cada peça nasce de uma conversa. Nada de flash repetido — o desenho é seu.</p>
+
+        {failed ? (
+          <div className="mt-10 flex flex-col items-center gap-4 rounded-2xl border border-border bg-background px-6 py-16 text-center">
+            <Cat className="size-10 text-rose-400" />
+            <p className="max-w-md text-muted-foreground">
+              As fotos não chegaram agora. Isso costuma ser passageiro — tente novamente para
+              carregar um novo lote de gatinhos.
+            </p>
+            <Button onClick={() => void load()} className="rounded-full bg-rose-500 text-white hover:bg-rose-500/90">
+              <RefreshCw /> Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {loading && kittens.length === 0
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="aspect-square w-full rounded-2xl" />
+                ))
+              : kittens.map((k, i) => (
+                  <figure
+                    key={`${k.id}-${i}`}
+                    className="group relative overflow-hidden rounded-2xl border border-border bg-background"
+                  >
+                    <img
+                      src={k.url}
+                      alt="Gatinho fofo"
+                      loading="lazy"
+                      className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                    <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-background/95 to-transparent px-3 pb-3 pt-8 text-xs uppercase tracking-widest text-muted-foreground">
+                      <span>Miau #{i + 1}</span>
+                      <Heart className="size-4 text-rose-400 opacity-0 transition group-hover:opacity-100" />
+                    </figcaption>
+                  </figure>
+                ))}
+          </div>
+        )}
       </div>
-      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {WORKS.map((w, i) => (
-          <figure key={w.title} className={`group overflow-hidden ${i === 1 ? "lg:mt-12" : ""}`}>
-            <div className="overflow-hidden">
-              <img src={w.src} alt={`Tatuagem ${w.title} em estilo ${w.style}`} loading="lazy" width={800} height={1008} className="aspect-[4/5] w-full object-cover grayscale transition duration-700 group-hover:scale-105 group-hover:grayscale-0" />
-            </div>
-            <figcaption className="mt-3 flex items-baseline justify-between border-t border-border pt-3">
-              <span className="font-display text-xl uppercase">{w.title}</span>
-              <span className="text-xs uppercase tracking-widest text-muted-foreground">{w.style}</span>
-            </figcaption>
-          </figure>
+    </section>
+  );
+}
+
+function Fatos() {
+  return (
+    <section id="fatos" className="mx-auto max-w-6xl px-5 py-20">
+      <p className="text-xs uppercase tracking-[0.3em] text-rose-400">02 — Fatos</p>
+      <h2 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+        Coisas que todo gatinho sabe
+      </h2>
+
+      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        {FATOS.map((f) => (
+          <article
+            key={f.titulo}
+            className="rounded-2xl border border-border bg-card p-6 transition-colors hover:border-rose-500/40"
+          >
+            <span className="text-3xl" aria-hidden>
+              {f.emoji}
+            </span>
+            <h3 className="mt-4 text-xl font-semibold text-foreground">{f.titulo}</h3>
+            <p className="mt-2 text-muted-foreground">{f.texto}</p>
+          </article>
         ))}
       </div>
     </section>
   );
 }
 
-const PILLARS = [
-  { icon: PenTool, title: "Arte personalizada", text: "Desenho exclusivo criado a partir da sua história, referências e anatomia." },
-  { icon: ShieldCheck, title: "Higiene rigorosa", text: "Agulhas e materiais descartáveis, superfícies protegidas e esterilização em autoclave." },
-  { icon: Sparkles, title: "Cuidado no pós", text: "Orientação completa de cicatrização e acompanhamento depois da sessão." },
-];
-
-function Studio() {
+function Sobre() {
   return (
-    <section id="estudio" className="border-y border-border bg-card">
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-24 lg:grid-cols-2">
-        <div>
-          <p className="eyebrow">02 — O estúdio</p>
-          <h2 className="mt-3 font-display text-5xl uppercase leading-none sm:text-6xl">Arte com <span className="text-primary">respeito</span> ao seu corpo.</h2>
-          <p className="mt-6 max-w-md text-muted-foreground">
-            O {STUDIO_NAME} é um espaço intimista, pensado para que você se sinta seguro do primeiro rascunho à última linha.
-          </p>
-        </div>
-        <div className="divide-y divide-border">
-          {PILLARS.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="flex gap-5 py-6 first:pt-0">
-              <Icon className="mt-1 size-6 shrink-0 text-primary" />
-              <div>
-                <h3 className="font-display text-2xl uppercase">{title}</h3>
-                <p className="mt-1 text-muted-foreground">{text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const EMPTY: BookingRequest = { nome: "", whatsapp: "", estilo: "", tamanho: "", local: "", ideia: "", preferencia: "" };
-
-function Booking() {
-  const [data, setData] = useState<BookingRequest>(EMPTY);
-  const [errors, setErrors] = useState<Partial<Record<keyof BookingRequest, string>>>({});
-  const configured = isWhatsappConfigured();
-
-  const set = (k: keyof BookingRequest) => (e: { target: { value: string } }) => setData((d) => ({ ...d, [k]: e.target.value }));
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const parsed = schema.safeParse(data);
-    if (!parsed.success) {
-      const errs: typeof errors = {};
-      for (const issue of parsed.error.issues) errs[issue.path[0] as keyof BookingRequest] ??= issue.message;
-      setErrors(errs);
-      return;
-    }
-    setErrors({});
-    const link = buildWhatsappLink(parsed.data);
-    if (!link) {
-      toast.error("WhatsApp do estúdio ainda não configurado", { description: "Sua solicitação não pôde ser enviada. Tente novamente mais tarde." });
-      return;
-    }
-    window.open(link, "_blank", "noopener,noreferrer");
-    toast.success("Abrindo o WhatsApp", { description: "Envie a mensagem para concluir sua solicitação." });
-  }
-
-  const field = (k: keyof BookingRequest, label: string, el: React.ReactNode) => (
-    <div className="space-y-2">
-      <Label htmlFor={k} className="text-xs uppercase tracking-widest">{label}</Label>
-      {el}
-      {errors[k] && <p className="text-sm text-destructive">{errors[k]}</p>}
-    </div>
-  );
-
-  return (
-    <section id="agendar" className="mx-auto max-w-6xl px-5 py-24">
-      <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
-        <div>
-          <p className="eyebrow">03 — Agendamento</p>
-          <h2 className="mt-3 font-display text-5xl uppercase leading-none sm:text-6xl">Solicite seu <span className="font-serif normal-case italic text-primary">horário</span></h2>
-          <p className="mt-6 text-muted-foreground">
-            Preencha o formulário e envie pelo WhatsApp. <strong className="text-foreground">Isto é uma solicitação</strong> — o horário
-            não fica reservado automaticamente. O estúdio analisa sua ideia e responde para confirmar data, valor e detalhes.
-          </p>
-          {!configured && (
-            <div role="alert" className="mt-8 flex gap-3 border border-primary/50 bg-primary/10 p-4 text-sm">
-              <AlertTriangle className="size-5 shrink-0 text-primary" />
-              <p>O WhatsApp do estúdio ainda não foi configurado. O envio de solicitações estará disponível em breve.</p>
-            </div>
-          )}
-        </div>
-        <form onSubmit={onSubmit} noValidate className="grid gap-5 border border-border bg-card p-6 sm:grid-cols-2 sm:p-8">
-          {field("nome", "Nome", <Input id="nome" value={data.nome} onChange={set("nome")} maxLength={100} className="h-11" />)}
-          {field("whatsapp", "WhatsApp", <Input id="whatsapp" type="tel" inputMode="tel" placeholder="(11) 90000-0000" value={data.whatsapp} onChange={set("whatsapp")} maxLength={20} className="h-11" />)}
-          {field("estilo", "Estilo", (
-            <select id="estilo" value={data.estilo} onChange={set("estilo")} className={selectCls}>
-              <option value="">Selecione</option>
-              {ESTILOS.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          ))}
-          {field("tamanho", "Tamanho", (
-            <select id="tamanho" value={data.tamanho} onChange={set("tamanho")} className={selectCls}>
-              <option value="">Selecione</option>
-              {TAMANHOS.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          ))}
-          <div className="sm:col-span-2">{field("local", "Local do corpo", <Input id="local" placeholder="Ex.: antebraço direito" value={data.local} onChange={set("local")} maxLength={80} className="h-11" />)}</div>
-          <div className="sm:col-span-2">{field("ideia", "Ideia / referências", <Textarea id="ideia" rows={4} placeholder="Descreva a ideia e cole links de referências" value={data.ideia} onChange={set("ideia")} maxLength={1000} />)}</div>
-          <div className="sm:col-span-2">{field("preferencia", "Preferência de data / horário", <Input id="preferencia" placeholder="Ex.: sábados à tarde, a partir de novembro" value={data.preferencia} onChange={set("preferencia")} maxLength={150} className="h-11" />)}</div>
-          <div className="sm:col-span-2">
-            <Button type="submit" size="lg" className="h-12 w-full uppercase tracking-widest">
-              <MessageCircle /> Enviar solicitação pelo WhatsApp
-            </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">Sujeito à confirmação do estúdio.</p>
-          </div>
-        </form>
+    <section id="sobre" className="border-t border-border bg-card/40">
+      <div className="mx-auto flex max-w-3xl flex-col items-center px-5 py-20 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-rose-500/15 text-rose-400">
+          <Sparkles className="size-6" />
+        </span>
+        <h2 className="mt-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          Feito para ser leve
+        </h2>
+        <p className="mt-4 text-muted-foreground">
+          Sem cadastro, sem enrolação. Cada visita carrega um lote novo de fotos e você pode trocar
+          quantas vezes quiser. É só fofura, no menor tempo possível.
+        </p>
       </div>
     </section>
   );
@@ -254,18 +288,20 @@ function Booking() {
 
 function Index() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header />
       <main>
         <Hero />
-        <Portfolio />
-        <Studio />
-        <Booking />
+        <Gallery />
+        <Fatos />
+        <Sobre />
       </main>
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 py-8 text-sm text-muted-foreground sm:flex-row">
-          <span className="font-display text-lg uppercase text-foreground">Ritual<span className="text-primary">.</span> Tattoo Studio</span>
-          <span>© {new Date().getFullYear()} {STUDIO_NAME}</span>
+          <span className="flex items-center gap-2 font-semibold text-foreground">
+            <Cat className="size-4 text-rose-400" /> Miau.Club
+          </span>
+          <span>© {new Date().getFullYear()} — feito com ronrons</span>
         </div>
       </footer>
     </div>
