@@ -1,308 +1,393 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
-import { Cat, Heart, PawPrint, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bird, Gamepad2, Medal, RotateCcw, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Miau Club — gatinhos em um clique" },
+      { title: "Flap! — voe o mais longe que puder" },
       {
         name: "description",
         content:
-          "Um site rápido de gatinhos: galeria instantânea, fatos curiosos e muita fofura em um só lugar.",
+          "Um jogo mobile de passarinho: toque para voar, desvie dos canos e tente bater o seu recorde.",
       },
-      { property: "og:title", content: "Miau Club — gatinhos em um clique" },
-      {
-        property: "og:description",
-        content: "Galeria de gatinhos carregada na hora, com fatos curiosos sobre felinos.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Index,
 });
 
-type Kitty = { id: string; url: string };
+type Phase = "ready" | "playing" | "gameover";
 
-const NAV = [
-  { href: "#galeria", label: "Galeria" },
-  { href: "#fatos", label: "Fatos" },
-  { href: "#sobre", label: "Sobre" },
-];
+type Pipe = {
+  id: number;
+  x: number;
+  gapY: number;
+  passed: boolean;
+};
 
-const FATOS = [
-  {
-    emoji: "😴",
-    titulo: "Dormem 16h por dia",
-    texto:
-      "Gatos passam boa parte da vida dormindo. É instinto: poupar energia para as caçadas — mesmo as de brinquedo.",
-  },
-  {
-    emoji: "🎵",
-    titulo: "O ronronar cura",
-    texto:
-      "A vibração entre 25 e 150 Hz está associada a sensação de calma e até a processos de recuperação óssea.",
-  },
-  {
-    emoji: "👑",
-    titulo: "Umbigo de rainha",
-    texto:
-      "Quando um gato " +
-      "levanta o rabo bem reto para você, é um cumprimento amigável. Sinal de confiança total.",
-  },
-  {
-    emoji: "🚀",
-    titulo: "Salto de 6x o corpo",
-    texto:
-      "As patas traseiras são verdadeiras molas: um gato adulto salta cerca de seis vezes o próprio comprimento.",
-  },
-];
+type GameState = {
+  phase: Phase;
+  score: number;
+  bird: {
+    x: number;
+    y: number;
+    vy: number;
+  };
+  pipes: Pipe[];
+};
 
-function Header() {
+const WORLD_WIDTH = 360;
+const WORLD_HEIGHT = 640;
+const GROUND_Y = 574;
+const BIRD_SIZE = 30;
+const PIPE_WIDTH = 56;
+const PIPE_GAP = 174;
+const GRAVITY = 980;
+const FLAP_FORCE = -350;
+const PIPE_SPEED = 150;
+
+function createInitialGame(): GameState {
+  return {
+    phase: "ready",
+    score: 0,
+    bird: {
+      x: 82,
+      y: 292,
+      vy: 0,
+    },
+    pipes: [
+      { id: 1, x: 410, gapY: 304, passed: false },
+      { id: 2, x: 630, gapY: 390, passed: false },
+    ],
+  };
+}
+
+function copyGame(game: GameState): GameState {
+  return {
+    ...game,
+    bird: { ...game.bird },
+    pipes: game.pipes.map((pipe) => ({ ...pipe })),
+  };
+}
+
+function randomGap(): number {
+  return Math.round(235 + Math.random() * 170);
+}
+
+function BirdSprite({ y, vy }: { y: number; vy: number }) {
+  const tilt = Math.max(-25, Math.min(90, vy / 8));
+
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <a href="#topo" className="flex items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-          <span className="flex size-9 items-center justify-center rounded-full bg-rose-500/15 text-rose-400">
-            <Cat className="size-5" />
-          </span>
-          Miau<span className="text-rose-400">.</span>Club
-        </a>
-
-        <nav className="hidden items-center gap-8 sm:flex">
-          {NAV.map((n) => (
-            <a
-              key={n.href}
-              href={n.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {n.label}
-            </a>
-          ))}
-          <Button asChild size="sm" className="rounded-full bg-rose-500 text-white hover:bg-rose-500/90">
-            <a href="#galeria">Ver gatinhos</a>
-          </Button>
-        </nav>
+    <div
+      className="absolute z-30 h-[4.7%] w-[8.4%]"
+      style={{
+        left: `${(82 / WORLD_WIDTH) * 100}%`,
+        top: `${(y / WORLD_HEIGHT) * 100}%`,
+        transform: `rotate(${tilt}deg)`,
+        transformOrigin: "center",
+      }}
+    >
+      <div className="relative h-full w-full rounded-[52%] border-2 border-amber-700/50 bg-gradient-to-br from-yellow-200 via-amber-300 to-orange-400 shadow-[2px_4px_0_rgba(120,53,15,0.25)]">
+        <span className="absolute -right-[18%] top-[24%] h-[28%] w-[22%] rounded-full bg-slate-900" />
+        <span className="absolute -right-[31%] top-[27%] h-[16%] w-[26%] rounded-r-full bg-orange-500" />
+        <span className="absolute -left-[16%] top-[35%] h-[34%] w-[48%] rotate-12 rounded-full bg-amber-100/80" />
       </div>
-    </header>
+    </div>
   );
 }
 
-function Hero() {
-  return (
-    <section id="topo" className="relative overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-rose-500/20 blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-16 top-32 size-64 rounded-full bg-amber-400/15 blur-3xl"
-      />
+function PipePair({ pipe }: { pipe: Pipe }) {
+  const topHeight = Math.max(0, pipe.gapY - PIPE_GAP / 2);
+  const bottomTop = pipe.gapY + PIPE_GAP / 2;
+  const bottomHeight = Math.max(0, GROUND_Y - bottomTop);
+  const left = `${(pipe.x / WORLD_WIDTH) * 100}%`;
+  const width = `${(PIPE_WIDTH / WORLD_WIDTH) * 100}%`;
 
-      <div className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs uppercase tracking-widest text-muted-foreground">
-          <Zap className="size-3.5 text-rose-400" /> carrega em menos de um ronronar
+  return (
+    <div className="absolute inset-0 z-20 pointer-events-none">
+      <div
+        className="absolute top-0 rounded-b-md border-x-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14),inset_-5px_0_rgba(6,78,59,0.2)]"
+        style={{ left, width, height: `${(topHeight / WORLD_HEIGHT) * 100}%` }}
+      >
+        <span className="absolute -bottom-1 left-[-10%] h-7 w-[120%] rounded-md border-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14)]" />
+      </div>
+      <div
+        className="absolute rounded-t-md border-x-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14),inset_-5px_0_rgba(6,78,59,0.2)]"
+        style={{ left, top: `${(bottomTop / WORLD_HEIGHT) * 100}%`, width, height: `${(bottomHeight / WORLD_HEIGHT) * 100}%` }}
+      >
+        <span className="absolute -top-1 left-[-10%] h-7 w-[120%] rounded-md border-2 border-emerald-800/50 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600 shadow-[inset_5px_0_rgba(255,255,255,0.14)]" />
+      </div>
+    </div>
+  );
+}
+
+function GameBoard({ game, onAction }: { game: GameState; onAction: () => void }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label="Área do jogo. Toque para fazer o passarinho voar"
+      onPointerDown={(event) => {
+        event.preventDefault();
+        onAction();
+      }}
+      onKeyDown={(event) => {
+        if (event.code === "Space" || event.code === "ArrowUp" || event.code === "Enter") {
+          event.preventDefault();
+          onAction();
+        }
+      }}
+      className="relative mx-auto w-full max-w-[390px] touch-none select-none overflow-hidden rounded-[2rem] border-[5px] border-slate-900 bg-sky-300 shadow-[0_24px_70px_rgba(15,23,42,0.45)] outline-none ring-offset-4 focus-visible:ring-2 focus-visible:ring-yellow-300"
+      style={{ aspectRatio: `${WORLD_WIDTH}/${WORLD_HEIGHT}` }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-300 via-sky-400 to-cyan-300" />
+      <div className="absolute left-[8%] top-[14%] h-5 w-[25%] rounded-full bg-white/55 blur-[1px] before:absolute before:-left-[18%] before:-top-3 before:h-7 before:w-[52%] before:rounded-full before:bg-white/55 after:absolute after:-right-[17%] after:-top-2 after:h-6 after:w-[44%] after:rounded-full after:bg-white/55" />
+      <div className="absolute right-[8%] top-[31%] h-4 w-[20%] rounded-full bg-white/45 before:absolute before:-left-[25%] before:-top-3 before:h-6 before:w-[48%] before:rounded-full before:bg-white/45 after:absolute after:-right-[15%] after:-top-2 after:h-5 after:w-[42%] after:rounded-full after:bg-white/45" />
+      <div className="absolute bottom-[9%] left-[-8%] h-[17%] w-[65%] rounded-[50%] bg-emerald-500/80" />
+      <div className="absolute bottom-[8%] right-[-12%] h-[20%] w-[72%] rounded-[50%] bg-emerald-600/85" />
+      <div className="absolute bottom-0 z-40 h-[10.4%] w-full border-t-4 border-lime-600/60 bg-lime-400 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.18)_0px,rgba(255,255,255,0.18)_8px,transparent_8px,transparent_18px)]" />
+      <div className="absolute bottom-0 z-50 h-[4.8%] w-full bg-gradient-to-b from-amber-500 to-orange-700" />
+
+      {game.pipes.map((pipe) => (
+        <PipePair key={pipe.id} pipe={pipe} />
+      ))}
+      <BirdSprite y={game.bird.y} vy={game.bird.vy} />
+
+      <div className="absolute left-0 right-0 top-[5%] z-50 flex justify-center">
+        <span className="text-5xl font-black tracking-tight text-white drop-shadow-[0_4px_0_rgba(15,23,42,0.35)] sm:text-6xl">
+          {game.score}
         </span>
-
-        <h1 className="mt-6 max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-7xl">
-          Um site de <span className="text-rose-400">gatinhos</span>,
-          <br />
-          rápido como um bote.
-        </h1>
-
-        <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-          Fotos novas a cada clique, fatos curiosos e nenhuma enrolação. Aperte o botão e receba
-          uma dose instantânea de fofura.
-        </p>
-
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <Button asChild size="lg" className="h-12 rounded-full bg-rose-500 px-7 text-white hover:bg-rose-500/90">
-            <a href="#galeria">
-              <PawPrint className="mr-1" /> Abrir a galeria
-            </a>
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="h-12 rounded-full border-border px-7 hover:bg-accent"
-          >
-            <a href="#fatos">Fatos curiosos</a>
-          </Button>
-        </div>
-
-        <dl className="mt-14 grid max-w-lg grid-cols-3 gap-4 border-t border-border pt-6">
-          {[
-            { valor: "1", rotulo: "clique para trocar" },
-            { valor: "12", rotulo: "fotos por lote" },
-            { valor: "∞", rotulo: "quantidade de fofura" },
-          ].map((s) => (
-            <div key={s.rotulo}>
-              <dt className="text-2xl font-bold text-foreground">{s.valor}</dt>
-              <dd className="text-xs uppercase tracking-widest text-muted-foreground">{s.rotulo}</dd>
-            </div>
-          ))}
-        </dl>
       </div>
-    </section>
-  );
-}
 
-function Gallery() {
-  const [kittens, setKittens] = useState<Kitty[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setFailed(false);
-    try {
-      const res = await fetch("https://api.thecatapi.com/v1/images/search?limit=12&size=med");
-      if (!res.ok) throw new Error("Não foi possível buscar as fotos");
-      const data = (await res.json()) as Kitty[];
-      if (!Array.isArray(data) || data.length === 0) throw new Error("Resposta vazia");
-      setKittens(data);
-    } catch {
-      setFailed(true);
-      setKittens([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <section id="galeria" className="border-y border-border bg-card/40">
-      <div className="mx-auto max-w-6xl px-5 py-20">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-rose-400">01 — Galeria</p>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-              Gatinhos do momento
-            </h2>
+      {game.phase === "ready" && (
+        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/10 px-6 text-center">
+          <div className="rounded-3xl border border-white/35 bg-slate-950/75 px-7 py-6 shadow-2xl backdrop-blur-sm">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-yellow-300 text-slate-900 shadow-lg">
+              <Bird className="size-8" />
+            </div>
+            <h2 className="mt-4 text-2xl font-black uppercase tracking-tight text-white">Toque para voar</h2>
+            <p className="mt-2 text-sm text-slate-200">Passe pelos canos e não encoste no chão.</p>
           </div>
-          <Button
-            onClick={() => void load()}
-            disabled={loading}
-            variant="outline"
-            className="rounded-full border-border"
-          >
-            <RefreshCw className={loading ? "animate-spin" : undefined} />
-            {loading ? "Buscando..." : "Outro lote"}
-          </Button>
         </div>
+      )}
 
-        {failed ? (
-          <div className="mt-10 flex flex-col items-center gap-4 rounded-2xl border border-border bg-background px-6 py-16 text-center">
-            <Cat className="size-10 text-rose-400" />
-            <p className="max-w-md text-muted-foreground">
-              As fotos não chegaram agora. Isso costuma ser passageiro — tente novamente para
-              carregar um novo lote de gatinhos.
-            </p>
-            <Button onClick={() => void load()} className="rounded-full bg-rose-500 text-white hover:bg-rose-500/90">
-              <RefreshCw /> Tentar de novo
+      {game.phase === "gameover" && (
+        <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/45 px-6 text-center backdrop-blur-[2px]">
+          <div className="w-full max-w-[250px] rounded-3xl border border-white/20 bg-slate-950/90 p-6 shadow-2xl">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-orange-400 text-slate-950">
+              <Bird className="size-6" />
+            </div>
+            <p className="mt-3 text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">Fim de jogo</p>
+            <p className="mt-1 text-5xl font-black text-white">{game.score}</p>
+            <p className="mt-1 text-sm text-slate-300">pontos conquistados</p>
+            <Button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAction();
+              }}
+              className="mt-5 h-11 w-full rounded-xl bg-yellow-300 font-black text-slate-950 hover:bg-yellow-200"
+            >
+              <RotateCcw className="size-4" /> Jogar novamente
             </Button>
           </div>
-        ) : (
-          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {loading && kittens.length === 0
-              ? Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="aspect-square w-full rounded-2xl" />
-                ))
-              : kittens.map((k, i) => (
-                  <figure
-                    key={`${k.id}-${i}`}
-                    className="group relative overflow-hidden rounded-2xl border border-border bg-background"
-                  >
-                    <img
-                      src={k.url}
-                      alt="Gatinho fofo"
-                      loading="lazy"
-                      className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-background/95 to-transparent px-3 pb-3 pt-8 text-xs uppercase tracking-widest text-muted-foreground">
-                      <span>Miau #{i + 1}</span>
-                      <Heart className="size-4 text-rose-400 opacity-0 transition group-hover:opacity-100" />
-                    </figcaption>
-                  </figure>
-                ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function Fatos() {
-  return (
-    <section id="fatos" className="mx-auto max-w-6xl px-5 py-20">
-      <p className="text-xs uppercase tracking-[0.3em] text-rose-400">02 — Fatos</p>
-      <h2 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-        Coisas que todo gatinho sabe
-      </h2>
-
-      <div className="mt-10 grid gap-4 sm:grid-cols-2">
-        {FATOS.map((f) => (
-          <article
-            key={f.titulo}
-            className="rounded-2xl border border-border bg-card p-6 transition-colors hover:border-rose-500/40"
-          >
-            <span className="text-3xl" aria-hidden>
-              {f.emoji}
-            </span>
-            <h3 className="mt-4 text-xl font-semibold text-foreground">{f.titulo}</h3>
-            <p className="mt-2 text-muted-foreground">{f.texto}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Sobre() {
-  return (
-    <section id="sobre" className="border-t border-border bg-card/40">
-      <div className="mx-auto flex max-w-3xl flex-col items-center px-5 py-20 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-rose-500/15 text-rose-400">
-          <Sparkles className="size-6" />
-        </span>
-        <h2 className="mt-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Feito para ser leve
-        </h2>
-        <p className="mt-4 text-muted-foreground">
-          Sem cadastro, sem enrolação. Cada visita carrega um lote novo de fotos e você pode trocar
-          quantas vezes quiser. É só fofura, no menor tempo possível.
-        </p>
-      </div>
-    </section>
+        </div>
+      )}
+    </div>
   );
 }
 
 function Index() {
+  const gameRef = useRef<GameState>(createInitialGame());
+  const [game, setGame] = useState<GameState>(() => copyGame(gameRef.current));
+  const [best, setBest] = useState(0);
+
+  useEffect(() => {
+    try {
+      const savedBest = Number(window.localStorage.getItem("flap-best") ?? 0);
+      setBest(Number.isFinite(savedBest) ? savedBest : 0);
+    } catch {
+      setBest(0);
+    }
+  }, []);
+
+  const beginGame = useCallback(() => {
+    const next = createInitialGame();
+    next.phase = "playing";
+    next.bird.vy = FLAP_FORCE;
+    gameRef.current = next;
+    setGame(copyGame(next));
+  }, []);
+
+  const handleAction = useCallback(() => {
+    const current = gameRef.current;
+
+    if (current.phase === "gameover") {
+      beginGame();
+      return;
+    }
+
+    if (current.phase === "ready") {
+      current.phase = "playing";
+    }
+
+    current.bird.vy = FLAP_FORCE;
+    setGame(copyGame(current));
+  }, [beginGame]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+    let previousTime = performance.now();
+
+    const tick = (time: number) => {
+      const delta = Math.min((time - previousTime) / 1000, 0.034);
+      previousTime = time;
+      const current = gameRef.current;
+
+      if (current.phase === "playing") {
+        current.bird.vy += GRAVITY * delta;
+        current.bird.y += current.bird.vy * delta;
+
+        current.pipes.forEach((pipe) => {
+          pipe.x -= PIPE_SPEED * delta;
+
+          if (!pipe.passed && pipe.x + PIPE_WIDTH < current.bird.x) {
+            pipe.passed = true;
+            current.score += 1;
+          }
+        });
+
+        current.pipes = current.pipes.filter((pipe) => pipe.x > -PIPE_WIDTH - 12);
+        const lastPipe = current.pipes[current.pipes.length - 1];
+        if (!lastPipe || lastPipe.x < WORLD_WIDTH - 170) {
+          current.pipes.push({
+            id: Date.now(),
+            x: lastPipe ? lastPipe.x + 220 : WORLD_WIDTH + 50,
+            gapY: randomGap(),
+            passed: false,
+          });
+        }
+
+        const birdLeft = current.bird.x;
+        const birdRight = birdLeft + BIRD_SIZE;
+        const birdTop = current.bird.y;
+        const birdBottom = birdTop + BIRD_SIZE;
+        const hitGround = birdTop < -8 || birdBottom > GROUND_Y;
+        const hitPipe = current.pipes.some((pipe) => {
+          const overlapsX = pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft;
+          const gapTop = pipe.gapY - PIPE_GAP / 2;
+          const gapBottom = pipe.gapY + PIPE_GAP / 2;
+          return overlapsX && (birdTop < gapTop || birdBottom > gapBottom);
+        });
+
+        if (hitGround || hitPipe) {
+          current.phase = "gameover";
+          setBest((previousBest) => {
+            const nextBest = Math.max(previousBest, current.score);
+            try {
+              window.localStorage.setItem("flap-best", String(nextBest));
+            } catch {
+              // O recorde continua funcionando durante a sessão mesmo sem armazenamento local.
+            }
+            return nextBest;
+          });
+        }
+
+        setGame(copyGame(current));
+      }
+
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === "Space" || event.code === "ArrowUp") {
+        event.preventDefault();
+        handleAction();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleAction]);
+
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main>
-        <Hero />
-        <Gallery />
-        <Fatos />
-        <Sobre />
-      </main>
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 py-8 text-sm text-muted-foreground sm:flex-row">
-          <span className="flex items-center gap-2 font-semibold text-foreground">
-            <Cat className="size-4 text-rose-400" /> Miau.Club
-          </span>
-          <span>© {new Date().getFullYear()} — feito com ronrons</span>
+    <div className="min-h-screen overflow-hidden bg-slate-950 text-white">
+      <header className="border-b border-white/10 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:h-20 sm:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 rotate-[-6deg] items-center justify-center rounded-xl border-2 border-slate-900 bg-yellow-300 text-slate-950 shadow-[3px_3px_0_#0f172a]">
+              <Bird className="size-6" />
+            </div>
+            <span className="text-2xl font-black tracking-[-0.08em] text-yellow-300">FLAP!</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+            <Trophy className="size-4 text-yellow-300" />
+            <span>Recorde: {best}</span>
+          </div>
         </div>
+      </header>
+
+      <main className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[1fr_430px] lg:items-center lg:gap-16 lg:py-20">
+        <section className="max-w-xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-yellow-300/25 bg-yellow-300/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-yellow-300">
+            <Gamepad2 className="size-4" /> Jogo rápido para celular
+          </div>
+          <h1 className="mt-6 text-5xl font-black leading-[0.95] tracking-[-0.06em] text-white sm:text-7xl">
+            Voe alto.
+            <br />
+            <span className="text-yellow-300">Não caia.</span>
+          </h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-slate-400 sm:text-lg">
+            Um toque mantém o passarinho no ar. Desvie dos canos, conquiste pontos e tente superar o seu melhor voo.
+          </p>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button
+              type="button"
+              onClick={handleAction}
+              className="h-12 rounded-xl bg-yellow-300 px-6 font-black text-slate-950 shadow-[0_8px_0_rgb(161,98,7)] transition hover:bg-yellow-200 active:translate-y-1 active:shadow-[0_4px_0_rgb(161,98,7)]"
+            >
+              <Bird className="size-5" /> {game.phase === "playing" ? "Bater asas" : "Começar a jogar"}
+            </Button>
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 px-4 text-sm text-slate-400">
+              <span className="hidden size-2 rounded-full bg-emerald-400 sm:block" />
+              Toque ou pressione espaço
+            </div>
+          </div>
+
+          <div className="mt-12 grid max-w-md grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <Medal className="size-5 text-yellow-300" />
+              <p className="mt-3 text-2xl font-black text-white">{game.score}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Voo atual</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <Trophy className="size-5 text-yellow-300" />
+              <p className="mt-3 text-2xl font-black text-white">{best}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Melhor voo</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="relative mx-auto w-full max-w-[390px] lg:justify-self-end">
+          <div className="absolute -inset-8 -z-10 rounded-full bg-yellow-300/10 blur-3xl" />
+          <GameBoard game={game} onAction={handleAction} />
+          <p className="mt-5 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+            Toque na tela para bater as asas
+          </p>
+        </section>
+      </main>
+
+      <footer className="border-t border-white/10 px-5 py-6 text-center text-xs text-slate-600 sm:px-8">
+        Cada voo é uma nova chance de chegar mais longe.
       </footer>
     </div>
   );
